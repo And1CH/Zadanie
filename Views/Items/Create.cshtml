@@ -1,0 +1,32 @@
+﻿@model WebApplication2.Models.CreateItemViewModel
+
+<h2>Create Item</h2>
+
+<form asp-action="Create" method="post">
+    <div>
+        <label asp-for="Item.Name"></label>
+        <input asp-for="Item.Name" />
+        <span asp-validation-for="Item.Name"></span>
+    </div>
+    <div>
+        <label asp-for="Item.Recipient"></label>
+        <input asp-for="Item.Recipient" />
+        <span asp-validation-for="Item.Recipient"></span>
+    </div>
+    <div>
+        <label asp-for="Item.Supplier"></label>
+        <input asp-for="Item.Supplier" />
+        <span asp-validation-for="Item.Supplier"></span>
+    </div>
+    <div>
+        <label asp-for="Item.Price"></label>
+        <input asp-for="Item.Price" />
+        <span asp-validation-for="Item.Price"></span>
+    </div>
+    <div>
+        <label asp-for="Item.ItemType"></label>
+        <select asp-for="Item.ItemType" asp-items="Model.ItemTypes"></select>
+        <span asp-validation-for="Item.ItemType"></span>
+    </div>
+    <button type="submit">Create Item</button>
+</form>
