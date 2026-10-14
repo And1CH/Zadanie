@@ -1,0 +1,14 @@
+{
+  "name": "framefind",
+  "version": "0.4.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "build:standalone": "node build-standalone.mjs",
+    "test:retrieval-browser": "node retrieval-browser-check.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
