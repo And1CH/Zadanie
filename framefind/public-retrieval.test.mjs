@@ -33,3 +33,28 @@ test('passive captions can support the same requested scene',async()=>{
  const r=await retrievePublicAssets(['old man petting dog'],'image',[],async url=>String(url).includes('openverse')?{results:[{...photo,title:'A dog being petted by an elderly man'}]}:{query:{pages:{}}});
  assert.equal(r.results.length,1);assert.deepEqual(r.results[0].sceneMissing,[]);
 });
+
+test('successive batches rotate wording then advance actual provider pages',async()=>{
+ const seen=[];const variants=sceneQueries(planSearch(['old man petting dog'],'image'),{visual:true});
+ const request=async input=>{const u=new URL(input);seen.push(u);return u.hostname.includes('openverse')?{results:[photo],page_count:10}:{query:{pages:{}},continue:{gsroffset:40}};};
+ for(let page=1;page<=variants.length+1;page++){
+  const r=await retrievePublicAssets(['old man petting dog'],'image',[],request,{visual:true,page});
+  assert.equal(r.pagination.hasMore,true);assert.equal(r.stats.queryVariant,variants[(page-1)%variants.length]);
+ }
+ assert.equal(seen[0].searchParams.get('page_size'),'40');assert.equal(seen[0].searchParams.get('page'),'1');
+ assert.equal(seen.at(-2).searchParams.get('page'),'2');assert.equal(seen.at(-1).searchParams.get('gsroffset'),'40');
+});
+test('candidate pools retain more than forty unique files and deduplicate across catalogs',async()=>{
+ const photos=Array.from({length:40},(_,i)=>({...photo,id:String(i),url:`https://example.org/${i}.jpg`,foreign_landing_url:`https://example.org/source/${i}`}));
+ const pages=Object.fromEntries(Array.from({length:40},(_,i)=>[i,{pageid:i,title:'File:Old man with dog.jpg',imageinfo:[{url:`https://example.org/${i+20}.jpg`,descriptionurl:`https://example.org/commons/${i}`,extmetadata:{}}]}]));
+ const r=await retrievePublicAssets(['old man petting dog'],'image',[],async url=>String(url).includes('openverse')?{results:photos,page_count:2}:{query:{pages},continue:{gsroffset:40}},{visual:true});
+ assert.equal(r.candidatePool.length,60);assert.ok(r.nearMatches.length>12);
+});
+test('an exhausted query does not hide remaining query variants or call providers again',async()=>{
+ const variants=sceneQueries(planSearch(['old man petting dog'],'image'),{visual:true});
+ const exhausted=['Openverse','Wikimedia Commons'].map(source=>source+'|'+variants[0]);
+ const r=await retrievePublicAssets(['old man petting dog'],'image',[],async()=>{assert.fail('must skip exhausted query');},{visual:true,page:variants.length+1,exhausted});
+ assert.equal(r.pagination.hasMore,true);assert.equal(r.error,null);
+ const done=await retrievePublicAssets(['old man petting dog'],'image',[],async()=>{assert.fail('all queries exhausted');},{visual:true,exhausted:variants.flatMap(q=>['Openverse|'+q,'Wikimedia Commons|'+q])});
+ assert.equal(done.pagination.hasMore,false);
+});

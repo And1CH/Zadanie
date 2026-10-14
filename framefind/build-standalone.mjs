@@ -4,7 +4,7 @@ let html=await read('public/index.html');
 const css=await read('public/style.css');
 const engine=(await read('search-engine.mjs')).replace(/^export /gm,'');
 const retrievalSource=(await read('public-retrieval.mjs')).replace(/^import .*;\n/gm,'').replace(/^export /gm,'');
-const retrieval='const {retrievePublicAssets}=(()=>{'+retrievalSource+';return {retrievePublicAssets};})();';
+const retrieval='const {retrievePublicAssets,assetIdentity}=(()=>{'+retrievalSource+';return {retrievePublicAssets,assetIdentity};})();';
 const visualSource=(await read('visual-search.mjs')).replace(/^export /gm,'');
 const visual='const {rankVisually}=(()=>{'+visualSource+';return {rankVisually};})();';
 const adapter=(await read('share/standalone-adapter.js')).replace(/^import .*;\n/gm,'');

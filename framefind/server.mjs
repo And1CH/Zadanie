@@ -93,7 +93,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&url.pathname==='/api/search'){
       const b=await body(req);
       if(!['video','image','music','sound'].includes(b.type)||!Array.isArray(b.history)||!b.history.length||b.history.length>20||b.history.some(s=>typeof s!=='string'||s.length>1000)||!refine(b.history))return send(400,{error:'Choose an asset type and enter a search (up to 1,000 characters).'});
-      return send(200,await search(b.history,b.type,getJSON,{visual:!!b.visual}));
+      return send(200,await search(b.history,b.type,getJSON,{visual:!!b.visual,page:b.page??1,exhausted:Array.isArray(b.exhausted)?b.exhausted.slice(0,32):[]}));
     }
     if(req.method==='GET'&&url.pathname==='/api/library')return send(200,{results:library});
     if(req.method==='DELETE'&&url.pathname.startsWith('/api/library/')){
@@ -117,7 +117,7 @@ const server=http.createServer(async(req,res)=>{
       const next=[...library,item];await writeFile(libraryPath,JSON.stringify(next,null,2));library=next;return send(201,item);
     }
     if(req.method!=='GET')return send(405,{error:'Method not allowed'});
-    const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css','/search-engine.mjs':'../search-engine.mjs','/visual-search.mjs':'../visual-search.mjs'};
+    const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css','/search-engine.mjs':'../search-engine.mjs','/visual-search.mjs':'../visual-search.mjs','/public-retrieval.mjs':'../public-retrieval.mjs'};
     if(!files[url.pathname])return send(404,{error:'Not found'});
     res.writeHead(200,{'Cache-Control':'no-store','Content-Type':/\.(js|mjs)$/.test(url.pathname)?'text/javascript':url.pathname.endsWith('.css')?'text/css':'text/html','Content-Security-Policy':"default-src 'self'; img-src 'self' https:; media-src 'self' https:; style-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https:; worker-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"});
     res.end(await readFile(path.join(root,'public',files[url.pathname])));

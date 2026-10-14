@@ -1,5 +1,5 @@
 const MODEL='Xenova/clip-vit-base-patch32';
-const RUNTIME='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/dist/transformers.min.js';
+const RUNTIME='https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2/dist/transformers.web.min.js';
 let modelPromise=null;
 function abortable(promise,signal){if(!signal)return promise;if(signal.aborted)return Promise.reject(new DOMException('Search cancelled','AbortError'));return new Promise((resolve,reject)=>{const cancel=()=>reject(new DOMException('Search cancelled','AbortError'));signal.addEventListener('abort',cancel,{once:true});promise.then(value=>{signal.removeEventListener('abort',cancel);resolve(value);},error=>{signal.removeEventListener('abort',cancel);reject(error);});});}
 export function visualLabels(plan){
@@ -28,7 +28,7 @@ async function loadModel(onProgress,signal){
  })().catch(e=>{modelPromise=null;throw e;});}
  return abortable(modelPromise,signal);
 }
-export async function rankVisually(candidates,plan,{signal,onProgress,limit=20,loader=loadModel,readImage=defaultReadImage}={}){
+export async function rankVisually(candidates,plan,{signal,onProgress,limit=40,loader=loadModel,readImage=defaultReadImage}={}){
  if(!candidates.length)return {results:[],nearMatches:[],failures:[],checked:0};
  const labels=visualLabels(plan);
  const runtime=await loader(onProgress,signal);
@@ -44,7 +44,7 @@ export async function rankVisually(candidates,plan,{signal,onProgress,limit=20,l
   }catch(e){if(e.name==='AbortError')throw e;failures.push({title:asset.title,error:'Image pixels could not be read or compared'});}
  }
  ranked.sort((a,b)=>b.visualMargin-a.visualMargin||b.visualScore-a.visualScore);
- return {results:ranked.filter(a=>a.visualAccepted).slice(0,8),nearMatches:ranked.filter(a=>!a.visualAccepted).slice(0,8),failures,checked:ranked.length};
+ return {results:ranked.filter(a=>a.visualAccepted),nearMatches:ranked.filter(a=>!a.visualAccepted),failures,checked:ranked.length};
 }
 async function defaultReadImage(asset,runtime,signal){
  const source=asset.thumbnail||asset.download;const u=new URL(source,location.href);
