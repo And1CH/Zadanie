@@ -38,12 +38,12 @@ async function stockRequest(url){
   child.on('close',code=>{clearTimeout(timer);if(code!==0)return reject(Error(/401|403/.test(error)?'The photo service rejected the request. Check API access and network settings.':'The photo service could not be reached.'));try{resolve(JSON.parse(output));}catch{reject(Error('The photo service returned an invalid response.'));}});
  });
 }
-export async function search(history,type,request=getJSON){
+export async function search(history,type,request=getJSON,options={}){
  let stockError=null;
  if(type==='image'&&process.env.PEXELS_API_KEY&&request===getJSON){
   try{const stock=await searchStockImages(history,library,stockRequest);if(stock.results.length)return stock;}catch(e){stockError=e.message;}
  }
- const result=await (type==='video'?huntAssets(history,type,library,request):retrievePublicAssets(history,type,library,request));
+ const result=await (type==='video'?huntAssets(history,type,library,request):retrievePublicAssets(history,type,library,request,options));
  if(stockError)result.warnings=[...(result.warnings||[]),'Pexels unavailable: '+stockError];
  return result;
 }
@@ -93,7 +93,7 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&url.pathname==='/api/search'){
       const b=await body(req);
       if(!['video','image','music','sound'].includes(b.type)||!Array.isArray(b.history)||!b.history.length||b.history.length>20||b.history.some(s=>typeof s!=='string'||s.length>1000)||!refine(b.history))return send(400,{error:'Choose an asset type and enter a search (up to 1,000 characters).'});
-      return send(200,await search(b.history,b.type));
+      return send(200,await search(b.history,b.type,getJSON,{visual:!!b.visual}));
     }
     if(req.method==='GET'&&url.pathname==='/api/library')return send(200,{results:library});
     if(req.method==='DELETE'&&url.pathname.startsWith('/api/library/')){
@@ -117,9 +117,9 @@ const server=http.createServer(async(req,res)=>{
       const next=[...library,item];await writeFile(libraryPath,JSON.stringify(next,null,2));library=next;return send(201,item);
     }
     if(req.method!=='GET')return send(405,{error:'Method not allowed'});
-    const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css','/search-engine.mjs':'../search-engine.mjs'};
+    const files={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css','/search-engine.mjs':'../search-engine.mjs','/visual-search.mjs':'../visual-search.mjs'};
     if(!files[url.pathname])return send(404,{error:'Not found'});
-    res.writeHead(200,{'Cache-Control':'no-store','Content-Type':/\.(js|mjs)$/.test(url.pathname)?'text/javascript':url.pathname.endsWith('.css')?'text/css':'text/html','Content-Security-Policy':"default-src 'self'; img-src 'self' https:; media-src 'self' https:; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"});
+    res.writeHead(200,{'Cache-Control':'no-store','Content-Type':/\.(js|mjs)$/.test(url.pathname)?'text/javascript':url.pathname.endsWith('.css')?'text/css':'text/html','Content-Security-Policy':"default-src 'self'; img-src 'self' https:; media-src 'self' https:; style-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https:; worker-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"});
     res.end(await readFile(path.join(root,'public',files[url.pathname])));
   } catch(e){send(400,{error:e instanceof SyntaxError?'Invalid request':e.message});}
 });
