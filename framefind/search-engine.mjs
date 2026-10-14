@@ -4,7 +4,7 @@ const groups=[['warm','warmer','golden','cool','cooler'],['dark','darker','brigh
 const normalize=s=>String(s).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
 export function words(s){return normalize(s).match(/[\p{L}\p{N}]+/gu)?.filter(w=>w.length>1&&!stop.has(w))||[];}
 const unique=a=>[...new Set(a)];
-const aliases={old:'elderly',senior:'elderly',seniors:'elderly',aged:'elderly',men:'man',male:'man',males:'man',women:'woman',female:'woman',dogs:'dog',canine:'dog',petting:'pet',stroking:'pet',patting:'pet',pets:'pet',puppy:'dog',puppies:'dog'};
+const aliases={senior:'elderly',seniors:'elderly',men:'man',male:'man',males:'man',women:'woman',female:'woman',dogs:'dog',canine:'dog',stroking:'petting',patting:'petting',puppy:'dog',puppies:'dog'};
 const related=w=>aliases[w]||w;
 export function planSearch(history,type='video'){
  let terms=[],excluded=[],phrase='',year=null,before=null,after=null,sort='relevance';
@@ -29,11 +29,44 @@ export function planSearch(history,type='video'){
  return {type,terms,excluded,phrase,year,before,after,sort,query:query||(phrase?phrase:'media'),summary:[query,phrase?`quote: “${phrase}”`:null,excluded.length?`exclude: ${excluded.join(', ')}`:null,year?`year: ${year}`:null,before?`before ${before}`:null,after?`after ${after}`:null,sort!=='relevance'?`${sort} first`:null].filter(Boolean).join(' · ')};
 }
 function strip(s){return String(s||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
+export function imageSceneEvidence(asset,plan){
+ const caption=normalize(`${asset.title} ${asset.sceneDescription ?? asset.description ?? ''}`);
+ const requested=new Set(plan.terms);
+ const missing=[];
+ const person=requested.has('man')?'man':requested.has('woman')?'woman':null;
+ const personWords=person==='man'?'man|men|gentleman|male':person==='woman'?'woman|women|lady|female':null;
+ const dog=requested.has('dog')||requested.has('puppy');
+ const action=requested.has('petting')||requested.has('stroking')||requested.has('patting');
+ const elderly=person&&['old','elderly','senior','aged'].some(w=>requested.has(w));
+ if(person&&!new RegExp('\\b('+personWords+')\\b').test(caption))missing.push(`a ${person}`);
+ if(dog&&!/\bdogs?\b|\bpupp(?:y|ies)\b|\bcanine\b/.test(caption))missing.push('a dog');
+ if(elderly&&!new RegExp('\\b(old|elderly|senior|aged)\\s+(?:(?:black|white|asian|bearded)\\s+)?('+personWords+')\\b|\\b('+personWords+')\\s+(?:is|looks)\\s+(elderly|senior)\\b').test(caption))missing.push(`an elderly ${person}`);
+ if(action&&dog){
+  const verbs='petting|stroking|patting|pets|strokes|pats';
+  const animal='dog|dogs|puppy|puppies|canine';
+  let supported=false;
+  if(person){
+   const agePrefix=elderly?'(?:old|elderly|senior|aged)\\s+(?:(?:black|white|asian|bearded)\\s+)?':'';
+   const otherActor='man|men|woman|women|girl|boy|child|children|couple';
+   const active=new RegExp('\\b'+agePrefix+'(?:'+personWords+')\\b(?:(?!\\b(?:'+otherActor+')\\b).){0,80}?\\b(?:'+verbs+')\\b(?:\\s+[a-z]+){0,6}\\s+\\b(?:'+animal+')\\b');
+   const passive=new RegExp('\\b(?:'+animal+')\\b\\s+(?:being\\s+)?(?:petted|stroked|patted)\\s+by\\s+(?:an?\\s+)?'+agePrefix+'(?:'+personWords+')\\b');
+   supported=active.test(caption)||passive.test(caption);
+  }else supported=new RegExp('\\b(?:'+verbs+')\\b(?:\\s+[a-z]+){0,6}\\s+\\b(?:'+animal+')\\b').test(caption);
+  if(!supported)missing.push(person?`the ${elderly?'elderly ':''}${person} petting the dog`:'petting the dog');
+ }
+
+ if(dog&&/\b(toy|stuffed|plush)\s+(?:[a-z]+\s+){0,2}dogs?\b/.test(caption))missing.push('a real dog rather than a toy');
+ return {missing,strict:plan.type==='image'&&!!person&&(!!elderly||!!action),caption};
+}
 export function rankAssets(assets,plan){
  const seen=new Set();
  return assets.map(a=>{
-  const title=normalize(a.title),text=normalize(`${a.title} ${a.description||''} ${(a.tags||[]).join(' ')}`),tokens=new Set(words(text).map(related));
+  const title=normalize(a.title);
+  // Creator names and broad tags are not descriptions of the depicted scene.
+  const scene=imageSceneEvidence(a,plan);
+  const tokens=new Set(words(scene.caption).map(related)),tagTokens=new Set(words((a.tags||[]).join(' ')).map(related));
   const found=plan.terms.filter(w=>tokens.has(related(w)));
+  const tagOnly=plan.terms.filter(w=>!found.includes(w)&&tagTokens.has(related(w)));
   const year=Number(String(a.date||a.year||'').match(/\b(?:19|20)\d{2}\b/)?.[0]||String(a.title).match(/\b(?:19|20)\d{2}\b/)?.[0]||0);
   if(plan.excluded.some(w=>tokens.has(related(w))))return null;
   if(plan.year&&year!==plan.year)return null;
@@ -41,8 +74,9 @@ export function rankAssets(assets,plan){
   if(plan.after&&(!year||year<=plan.after))return null;
   if(plan.terms.length&&found.length===0)return null;
   const coverage=plan.terms.length?found.length/plan.terms.length:0;
-  const score=coverage*60+plan.terms.filter(w=>new Set(words(title).map(related)).has(related(w))).length*7+(a.source==='Your library'?2:0);
-  return {...a,year:year||null,score,coverage,match:found.length?`Text matches: ${found.join(', ')}`:'Source candidate',matchLevel:coverage>=.75?'strong':'partial',matchedTerms:found};
+  const score=coverage*60+plan.terms.filter(w=>new Set(words(title).map(related)).has(related(w))).length*7+Math.min(4,tagOnly.length)+(a.source==='Your library'?2:0)-scene.missing.length*20;
+  const describedScene=scene.strict&&!scene.missing.length;
+  return {...a,year:year||null,score,coverage,sceneMissing:scene.strict?scene.missing:[],sceneSpecific:scene.strict,match:describedScene?'Source description supports the requested scene':found.length?`Caption terms: ${found.join(', ')}`:'Source candidate',matchLevel:describedScene?'described-scene':'partial',matchedTerms:found,tagOnlyTerms:tagOnly};
  }).filter(Boolean).sort((a,b)=>plan.sort==='oldest'?(a.year||9999)-(b.year||9999)||b.score-a.score:plan.sort==='newest'?(b.year||0)-(a.year||0)||b.score-a.score:b.score-a.score).filter(a=>{const key=a.url;if(seen.has(key))return false;seen.add(key);return true;});
 }
 export function sourceLinks(query,type){const q=encodeURIComponent(query);return(type==='image'?[['Google Images',`https://www.google.com/search?tbm=isch&q=${q}`],['Wikimedia Commons',`https://commons.wikimedia.org/w/index.php?search=${q}&title=Special:MediaSearch&type=image`]]:type==='video'?[['YouTube',`https://www.youtube.com/results?search_query=${q}`],['Internet Archive',`https://archive.org/search?query=${q}`]]:[['Freesound',`https://freesound.org/search/?q=${q}`],['Internet Archive',`https://archive.org/search?query=${q}`]]).map(([title,url])=>({title,url}));}

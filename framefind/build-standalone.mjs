@@ -11,7 +11,7 @@ const start=app.indexOf('function imageURL(a)'),end=app.indexOf('\nfunction safe
 app=app.slice(0,start)+"function imageURL(a){return safe(a.thumbnail||a.download);}"+app.slice(end);
 html=html.replace(/<link rel="stylesheet" href="[^\"]+">/,()=>'<style>'+css+'</style>');
 html=html.replace(/<script type="module" src="[^\"]+"><\/script>/,()=>'<script>\n(function(){\n'+engine+'\n'+retrieval+'\n'+adapter+'\n'+app+'\n})();</script>');
-html=html.replace('href="/"','href="#"').replace('SEARCH BUILD · v0.4.1','BROWSER EDITION · v0.4.1');
+html=html.replace('href="/"','href="#"').replace('SEARCH BUILD · v0.4.2','BROWSER EDITION · v0.4.2');
 await writeFile(new URL('share/Try-Framefind.html',import.meta.url),html);
 console.log('Built share/Try-Framefind.html with the shared search engine.');
 
